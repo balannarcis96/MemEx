@@ -1,2 +1,2 @@
 # intrusive_memory_management
-Intrusive , elegant solution for memory management in c++.
+Intrusive, elegant memory management solution for c++ high performance projects.
