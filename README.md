@@ -67,5 +67,8 @@ Usage Example:
    }
   ```
 
+```cpp
+MemoryManager::PrintStatistics();
+```
 ![image](https://user-images.githubusercontent.com/8436410/115960733-bf78d800-a51b-11eb-9e62-752e716d9bca.png)
 
