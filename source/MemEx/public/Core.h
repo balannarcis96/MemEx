@@ -33,9 +33,11 @@ namespace MemEx {
 	// Global deallocate block of memory
 	extern void GFree(ptr_t BlockPtr) noexcept;
 
+	//Efficient implentation of a spin lock
 	class SpinLock {
 	public:
-		void Lock() {
+		FORCEINLINE void Lock() noexcept
+		{
 #if __has_builtin(__builtin_ia32_pause)
 			for (;;) {
 				if (!bLock.exchange(true, std::memory_order_acquire)) {
@@ -58,11 +60,16 @@ namespace MemEx {
 #endif
 		}
 
-		void Unlock() { bLock.store(false, std::memory_order_release); }
+		FORCEINLINE void Unlock() noexcept
+		{
+			bLock.store(false, std::memory_order_release);
+		}
+
 	private:
 		std::atomic<bool> bLock = { false };
 	};
 
+	//RAII-based spin lock guard (scope guard)
 	class SpinLockScopeGuard {
 
 		FORCEINLINE explicit SpinLockScopeGuard(SpinLock* Lock) noexcept
@@ -71,7 +78,7 @@ namespace MemEx {
 			Lock->Lock();
 		}
 
-		FORCEINLINE ~SpinLockScopeGuard() noexcept 
+		FORCEINLINE ~SpinLockScopeGuard() noexcept
 		{
 			Lock->Unlock();
 		}
@@ -79,5 +86,4 @@ namespace MemEx {
 	private:
 		SpinLock* Lock;
 	};
-
 }

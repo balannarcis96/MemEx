@@ -52,63 +52,48 @@ namespace MemEx {
 
 		//Deallocate T
 		static void Deallocate(T* Obj) noexcept {
+
+			if constexpr (std::is_destructible_v<T>) {
+				//Call destructor manually
+				Obj->~T();
+			}
+
+			ptr_t PrevVal{ nullptr };
+
 			if constexpr (bUseSpinLock) {
-
-				if constexpr (std::is_destructible_v<T>) {
-					//Call destructor manually
-					Obj->~T();
-				}
-
 				{ //Critical section
 					SpinLockScopeGuard Guard(&SpinLock);
 
 					const uint64_t InsPos = TailPosition++;
 
-					ptr_t PrevVal = Pool[InsPos & PoolTraits::MyPoolMask];
-					if (PrevVal)
-					{
-						GFree(PrevVal);
-
-#ifdef MEMEX_STATISTICS
-						PoolTraits::TotalOSDeallocations++;
-#endif
-
-						return;
-					}
-
-#ifdef MEMEX_STATISTICS
-					PoolTraits::TotalDeallocations++;
-#endif
+					PrevVal = Pool[InsPos & PoolTraits::MyPoolMask];
+					Pool[InsPos & PoolTraits::MyPoolMask] = (ptr_t)Obj;
 				}
 			}
 			else {
 				uint64_t InsPos = (uint64_t)InterlockedIncrement64((volatile long long*)(&TailPosition));
 				InsPos--;
 
-				if constexpr (std::is_destructible_v<T>) {
-					//Call destructor manually
-					Obj->~T();
-				}
-
-				ptr_t PrevVal = InterlockedExchangePointer(
+				PrevVal = InterlockedExchangePointer(
 					reinterpret_cast<volatile ptr_t*>(&Pool[InsPos & PoolTraits::MyPoolMask]),
 					reinterpret_cast<ptr_t>(Obj)
 				);
-				if (PrevVal)
-				{
-					GFree(PrevVal);
-
-#ifdef MEMEX_STATISTICS
-					PoolTraits::TotalOSDeallocations++;
-#endif
-
-					return;
-				}
-
-#ifdef MEMEX_STATISTICS
-				PoolTraits::TotalDeallocations++;
-#endif
 			}
+
+			if (PrevVal)
+			{
+				GFree(PrevVal);
+
+#ifdef MEMEX_STATISTICS
+				PoolTraits::TotalOSDeallocations++;
+#endif
+
+				return;
+			}
+
+#ifdef MEMEX_STATISTICS
+			PoolTraits::TotalDeallocations++;
+#endif
 		}
 
 		//Get GUID of this Pool instance
@@ -192,5 +177,4 @@ namespace MemEx {
 		static inline uint64_t  PTR			TailPosition = 0;
 		static inline SpinLock				SpinLock{};
 	};
-
 }
