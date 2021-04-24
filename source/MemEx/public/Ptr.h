@@ -187,11 +187,11 @@ namespace MemEx {
 
 		FORCEINLINE void DestroyResource() const noexcept
 		{
-			/*if (this->Ptr)
+			if (this->Ptr)
 			{
 				this->Ptr->Destroy(this->Ptr, true);
 				this->Ptr = nullptr;
-			}*/
+			}
 		}
 	};
 

@@ -4,8 +4,7 @@ namespace MemEx {
 	/*------------------------------------------------------------
 		Memory Manager
 	  ------------------------------------------------------------*/
-	class MemoryManager final{
-	public:
+	struct MemoryManager {
 		template<typename T, size_t PoolSize>
 		using TObjectStore = TObjectPool<T, PoolSize>;
 
@@ -56,7 +55,7 @@ namespace MemEx {
 			if (!LargeBlock::Preallocate()) {
 				return 3;
 			}
-			if (ExtraLargeBlock::Preallocate()) {
+			if (!ExtraLargeBlock::Preallocate()) {
 				return 4;
 			}
 
@@ -69,6 +68,45 @@ namespace MemEx {
 #ifdef MEMEX_STATISTICS
 		static inline std::atomic<size_t> CustomSizeAllocations{ 0 };
 		static inline std::atomic<size_t> CustomSizeDeallocations{ 0 };
+
+		static void PrintStatistics() {
+			printf("MemoryManager ###############################################################\n");
+			printf("\n\tSmallBlock:\n\t\tAllocations:%lld\n\t\tDeallocations:%lld\n\t\tOSAllocations:%lld\n\t\tOSDeallocations:%lld",
+				SmallBlock::GetTotalAllocations(),
+				SmallBlock::GetTotalDeallocations(),
+				SmallBlock::GetTotalOSAllocations(),
+				SmallBlock::GetTotalOSDeallocations()
+			);
+			printf("\n\tMediumBlock:\n\t\tAllocations:%lld\n\t\tDeallocations:%lld\n\t\tOSAllocations:%lld\n\t\tOSDeallocations:%lld",
+				MediumBlock::GetTotalAllocations(),
+				MediumBlock::GetTotalDeallocations(),
+				MediumBlock::GetTotalOSAllocations(),
+				MediumBlock::GetTotalOSDeallocations()
+			);
+			printf("\n\tLargeBlock:\n\t\tAllocations:%lld\n\t\tDeallocations:%lld\n\t\tOSAllocations:%lld\n\t\tOSDeallocations:%lld",
+				LargeBlock::GetTotalAllocations(),
+				LargeBlock::GetTotalDeallocations(),
+				LargeBlock::GetTotalOSAllocations(),
+				LargeBlock::GetTotalOSDeallocations()
+			);
+			printf("\n\tExtraLargeBlock:\n\t\tAllocations:%lld\n\t\tDeallocations:%lld\n\t\tOSAllocations:%lld\n\t\tOSDeallocations:%lld",
+				ExtraLargeBlock::GetTotalAllocations(),
+				ExtraLargeBlock::GetTotalDeallocations(),
+				ExtraLargeBlock::GetTotalOSAllocations(),
+				ExtraLargeBlock::GetTotalOSDeallocations()
+			);
+			printf("\n\tCustomSize(OS Blocks):\n\t\tAllocations:%lld\n\t\tDeallocations:%lld",
+				CustomSizeAllocations.load(),
+				CustomSizeDeallocations.load()
+			);
+			printf("\n\tTotal Allocation:%lld\n\tTotal Deallocations:%lld\n\tTotal OSAllocations:%lld\n\tTotal OSDeallocations:%lld",
+				SmallBlock::GetTotalAllocations() + MediumBlock::GetTotalAllocations() + LargeBlock::GetTotalAllocations() + ExtraLargeBlock::GetTotalAllocations() + CustomSizeAllocations.load(),
+				SmallBlock::GetTotalDeallocations() + MediumBlock::GetTotalDeallocations() + LargeBlock::GetTotalDeallocations() + ExtraLargeBlock::GetTotalDeallocations() + CustomSizeDeallocations.load(),
+				SmallBlock::GetTotalOSAllocations() + MediumBlock::GetTotalOSAllocations() + LargeBlock::GetTotalOSAllocations() + ExtraLargeBlock::GetTotalOSAllocations(),
+				SmallBlock::GetTotalOSDeallocations() + MediumBlock::GetTotalOSDeallocations() + LargeBlock::GetTotalOSDeallocations() + ExtraLargeBlock::GetTotalOSDeallocations()
+			);
+			printf("MemoryManager ###############################################################\n");
+		}
 #endif
 
 #undef MEMORY_MANAGER_CALL_DESTRUCTOR
@@ -106,8 +144,51 @@ namespace MemEx {
 			}
 
 #pragma region Compiletime
+
 		template<typename T, typename ...Types>
-		static MPtr<T> Alloc(Types... Args) noexcept {
+		inline static MSharedPtr<T> AllocShared(Types... Args) noexcept {
+			if constexpr (std::is_reference_v<T>) {
+				static_assert(false, "Alloc<T> Cant allocate T reference!");
+			}
+
+			if constexpr (std::is_array_v<T>) {
+				static_assert(false, "Use AllocBuffer(Count) to allocate arrays!");
+			}
+
+			constexpr size_t Size = sizeof(T) + alignof(T);
+
+			MemoryBlockBase* NewBlockObject = MemoryManager::AllocBlock<T>();
+			if (!NewBlockObject) {
+				return { nullptr , nullptr };
+			}
+
+			ptr_t Ptr = NewBlockObject->Block;
+
+			//Align pointer
+			size_t Space = Size;
+			if (!std::align(alignof(T), sizeof(T), Ptr, Space)) {
+				NewBlockObject->Destroy((ptr_t)NewBlockObject, false);
+				//LogFatal("MemoryManager::Alloc(...) Failed to std::align({}, {}, ptr, {})!", alignof(T), sizeof(T), Size);
+				return { nullptr , nullptr };
+			}
+
+			if constexpr (sizeof...(Types) == 0) {
+				if constexpr (std::is_default_constructible_v<std::decay<T>::type>) {
+
+					//Call default constructor manually
+					new (Ptr) T();
+				}
+			}
+			else {
+				//Call constructor manually
+				new (Ptr) T(std::forward<Types...>(Args)...);
+			}
+
+			return { NewBlockObject, reinterpret_cast<T*>(Ptr) };
+		}
+
+		template<typename T, typename ...Types>
+		inline static MPtr<T> Alloc(Types... Args) noexcept {
 			if constexpr (std::is_reference_v<T>) {
 				static_assert(false, "Alloc<T> Cant allocate T reference!");
 			}
@@ -146,20 +227,6 @@ namespace MemEx {
 			}
 
 			return { NewBlockObject, reinterpret_cast<T*>(Ptr) };
-		}
-
-		template<typename T>
-		static MSharedPtr<T> AllocShared() noexcept {
-			MPtr<T> Unique = Alloc<T>();
-			if (Unique.IsNull()) {
-				return { nullptr, nullptr };
-			}
-
-			T* Ptr = Unique.Get();
-			MemoryBlockBase* BlockObject = Unique.BlockObject.Release();
-			Unique.Ptr = nullptr;
-
-			return MSharedPtr<T>(BlockObject, Ptr);
 		}
 
 		template<typename T>

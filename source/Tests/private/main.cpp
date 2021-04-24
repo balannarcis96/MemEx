@@ -1,4 +1,5 @@
 #include <iostream>
+#include <thread>
 
 #include <MemEx.h>
 
@@ -16,20 +17,106 @@ namespace MemEx {
 using namespace MemEx;
 
 struct TypeA {
-	int a{ 0 };
+	int a{ 23 };
+	double t{ 0.0 };
+
+	TypeA() {
+		std::cout << "TypeA()\n";
+	}
+	TypeA(double d) :t(d) {
+		std::cout << "TypeA(d)\n";
+	}
+	~TypeA() {
+		std::cout << "~TypeA()\n";
+	}
 };
 
-struct TypeB {
-	int a{ 0 };
-};
+bool TestUniquePtr() {
+	std::cout << "#TestUniquePtr():\n";
+	{
+		auto obj = MemoryManager::Alloc<TypeA>();
 
-int main(int argc, const char** argv) {
+		if (obj->a != 23) {
+			std::cout << "Alloc<TypeA> did not construct!";
+			return false;
+		}
+		else {
 
-	MPtr<TypeA> a;
+			std::cout << "Obj.a = " << obj->a << "\n"; //
 
-	auto b = MemoryManager::AllocShared<TypeB>();
-	auto b2 = MemoryManager::Alloc<TypeB>();
-	
+			obj->a = 55;
+
+			std::cout << "Obj.a = " << obj->a << "\n"; //
+		}
+	}
+
+	std::cout << "#TestUniquePtr():\n";
+
+	return true;
+}
+
+bool TestSharedPtr(int argc) {
+	std::cout << "#TestSharedPtr():\n";
+
+	std::cout << "#TestSharedPtr():\n";
+
+	auto obj22 = MemoryManager::AllocShared<TypeA>();
+
+	int i = 1000;
+	while (i--) {
+		auto obj = MemoryManager::AllocShared<TypeA>();
+	}
+
+	return true;
+}
+
+bool TestThread(int argc) {
+
+	std::thread t1, t2, t3;
+
+	auto work = [&]() {
+
+		int i = 1000;
+		while (i--) {
+			auto obj = MemoryManager::Alloc<TypeA>(23.3);
+		}
+	};
+
+	t1 = std::thread(work);
+	t2 = std::thread(work);
+	t3 = std::thread(work);
+
+	t1.join();
+	t2.join();
+	t3.join();
+
+	return true;
+}
+
+int main(int argc, const char** argv)
+{
+	if (MemoryManager::Initialize()) {
+		std::cout << "MemoryManager::Initialize() -> Failed";
+		std::cin.get();
+		return 1;
+	}
+
+	//if (!TestUniquePtr()) {
+	//	std::cin.get();
+	//	return 1;
+	//}
+
+	//if (!TestSharedPtr(argc)) {
+	//	std::cin.get();
+	//	return 1;
+	//}
+
+	if (!TestThread(argc)) {
+		std::cin.get();
+		return 1;
+	}
+
+	MemoryManager::PrintStatistics();
 
 	return 0;
 }

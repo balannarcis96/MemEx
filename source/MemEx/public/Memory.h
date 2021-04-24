@@ -35,8 +35,8 @@ namespace MemEx {
 	};
 
 	template<bool bAtomicRef = true>
-	class MemoryResource : private MemoryResourceBase {
-		FORCEINLINE void AddReference() const noexcept { // increment ref count if not zero, return true if successful
+	class MemoryResource : public MemoryResourceBase {
+		FORCEINLINE void AddReference() const noexcept { 
 			if constexpr (bAtomicRef) {
 				auto& VolatileRefCount = reinterpret_cast<volatile long&>(this->RefCount);
 
@@ -58,11 +58,6 @@ namespace MemEx {
 		FORCEINLINE bool ReleaseReference() const noexcept {
 			if constexpr (bAtomicRef) {
 				if (_InterlockedDecrement(reinterpret_cast<volatile long*>(&this->RefCount)) == 0) {
-
-					if (!this->Destroy.isNull()) {
-						this->Destroy((ptr_t)this, this->bDontDestruct == 0);
-					}
-
 					return true;
 				}
 			}
@@ -71,10 +66,6 @@ namespace MemEx {
 
 				if (RefCount == 0)
 				{
-					if (!this->Destroy.isNull()) {
-						this->Destroy((ptr_t)this, this->bDontDestruct == 0);
-					}
-
 					return true;
 				}
 			}

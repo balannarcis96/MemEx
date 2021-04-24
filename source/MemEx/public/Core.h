@@ -7,7 +7,7 @@
 #include <intrin.h>
 #include <memory>
 
-#define MEMEX_STATISTICS 1
+#define MEMEX_STATISTICS
 
 #ifndef ALIGNMENT
 #define ALIGNMENT alignof(size_t)
@@ -39,16 +39,6 @@ namespace MemEx {
 	public:
 		FORCEINLINE void Lock() noexcept
 		{
-#if __has_builtin(__builtin_ia32_pause)
-			for (;;) {
-				if (!bLock.exchange(true, std::memory_order_acquire)) {
-					break;
-				}
-				while (bLock.load(std::memory_order_relaxed)) {
-					__builtin_ia32_pause();
-				}
-			}
-#else
 			for (;;) {
 				if (!bLock.exchange(true, std::memory_order_acquire)) {
 					break;
@@ -58,7 +48,6 @@ namespace MemEx {
 					_mm_pause();
 				}
 			}
-#endif
 		}
 
 		FORCEINLINE void Unlock() noexcept
