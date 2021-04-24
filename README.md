@@ -36,7 +36,7 @@ Usage Example:
    }
    ...
    {
-    //some other scope allocate an array of TypeA
+    //some other scope allocate an array of size 64 of TypeA
     auto Array = MemoryManager::AllocBuffer<TypeA>(64);
     
     for(size_t i =0; i < 64; i++)
