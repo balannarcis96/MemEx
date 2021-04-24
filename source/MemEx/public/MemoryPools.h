@@ -3,10 +3,10 @@
 namespace MemEx {
 
 	/*------------------------------------------------------------
-		Ring based thread safe object pool
+		TObjectPool: Ring based thread safe object pool
 			bUseSpinLock:
-				[true] : SpinLock is used for sincronization
-				[false]: Atomic operations are used for sincronization
+				[true] : SpinLock is used for synchronization
+				[false]: Atomic operations are used for synchronization
 	  ------------------------------------------------------------*/
 	template<typename T, size_t PoolSize, bool bUseSpinLock = false>
 	class TObjectPool {
@@ -177,4 +177,6 @@ namespace MemEx {
 		static inline uint64_t  PTR			TailPosition = 0;
 		static inline SpinLock				SpinLock{};
 	};
+
+
 }
