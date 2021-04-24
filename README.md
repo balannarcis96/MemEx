@@ -18,12 +18,28 @@ Usage Example:
    	  	std::cout << "~TypeA()\n";
    	  }
    };
+   struct TypeB: IResource<TypeB> { //Intrusive example (simple static API added to the type)
+    	int a{ 23 };
+    	double t{ 0.0 };
+    
+    	TypeB() {
+    		std::cout << "TypeA()\n";
+    	}
+    	TypeB(double d) :t(d) {
+    		std::cout << "TypeA(d)\n";
+    	}
+    	~TypeB() {
+    		std::cout << "~TypeA()\n";
+    	}
+    };
    ...
    {
     //some scope
     auto Obj = MemoryManager::Alloc<TypeA>(23.3); //Allocate object
     
     Obj->a = 5; //modify object members etc
+    
+    auto ObjB = TypeB::New(23.3);
    }
    ...
    {
@@ -33,6 +49,8 @@ Usage Example:
     PassPointerToOtherThread(Obj);
     
     Obj->a = 5; //modify object members etc
+    
+    auto Objb = TypeB::NewShared(23.3);
    }
    ...
    {
@@ -44,6 +62,8 @@ Usage Example:
       Array[i].a = i + 1;
       ...
      }
+     
+     auto Array2 = TypeB::NewArray(64);
    }
   ```
 
