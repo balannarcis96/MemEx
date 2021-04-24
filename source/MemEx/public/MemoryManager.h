@@ -297,7 +297,7 @@ namespace MemEx {
 				};
 			}
 			else {
-				NewBlockObject = (IMemoryBlock*)MEM_ALLOC(sizeof(CustomBlockHeader) + Size);
+				NewBlockObject = (IMemoryBlock*)GAllocate(sizeof(CustomBlockHeader) + Size, ALIGNMENT);
 				if (NewBlockObject)
 				{
 					//Construct the CustomBlockHeader at the begining of the block
@@ -387,7 +387,7 @@ namespace MemEx {
 				};
 			}
 			else {
-				NewBlockObject = (IMemoryBlock*)MEM_ALLOC(sizeof(CustomBlockHeader) + Size);
+				NewBlockObject = (IMemoryBlock*)GAllocate(sizeof(CustomBlockHeader) + Size, ALIGNMENT);
 				if (NewBlockObject)
 				{
 					//Construct the CustomBlockHeader at the begining of the block
