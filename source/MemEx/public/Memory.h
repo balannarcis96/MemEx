@@ -1,8 +1,13 @@
 #pragma once
-/*------------------------------------------------------------
-	Memory.h
-		Memory block bookxkeeping structures
-  ------------------------------------------------------------*/
+/**
+ * @file Memory.h
+ *
+ * @brief MemEx base abstractions
+ *
+ * @author Balan Narcis
+ * Contact: balannarcis96@gmail.com
+ *
+ */
 
 namespace MemEx {
 	class MemoryResourceBase;

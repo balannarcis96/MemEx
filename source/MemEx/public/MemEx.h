@@ -12,4 +12,4 @@ namespace MemEx {
 #include "Memory.h"
 #include "Ptr.h"
 #include "TObjectPool.h"
-#include "MemoryPools.h"
+#include "MemoryManager.h"

@@ -1,4 +1,13 @@
 #pragma once
+/**
+ * @file Tunning.h
+ *
+ * @brief MemEx Tunning values, redefine these for your needs.
+ *
+ * @author Balan Narcis
+ * Contact: balannarcis96@gmail.com
+ *
+ */
 
 namespace MemEx {
 	

@@ -1,11 +1,16 @@
 #pragma once
-
-/*------------------------------------------------------------
-	TObjectPool: Ring based thread safe object pool
-		bUseSpinLock:
-			[true] : SpinLock is used for synchronization [default]
-			[false]: Atomic operations are used for synchronization
-  ------------------------------------------------------------*/
+/**
+ * @file TObjectPool.h
+ *
+ * @brief TObjectPool: Ring based thread safe object pool
+			bUseSpinLock:
+				[true] : SpinLock is used for synchronization [default]
+				[false]: Atomic operations are used for synchronization
+ *
+ * @author Balan Narcis
+ * Contact: balannarcis96@gmail.com
+ *
+ */
 
 namespace MemEx {
 	template<typename T, size_t PoolSize, bool bUseSpinLock = true>

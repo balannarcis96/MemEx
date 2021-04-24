@@ -1,8 +1,13 @@
 #pragma once
-/*------------------------------------------------------------
-	Ptr.h
-		MemEx Smart Pointers
-  ------------------------------------------------------------*/
+/**
+ * @file Ptr.h
+ *
+ * @brief MemEx Smart Pointers
+ *
+ * @author Balan Narcis
+ * Contact: balannarcis96@gmail.com
+ *
+ */
 
 namespace MemEx {
 #pragma region _TPtr [Base of all TPtr]

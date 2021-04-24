@@ -1,4 +1,13 @@
 #pragma once
+/**
+ * @file Core.h
+ *
+ * @brief MemEx core includes and abstractions
+ *
+ * @author Balan Narcis
+ * Contact: balannarcis96@gmail.com
+ *
+ */
 
 // Standard libs
 #include <atomic>

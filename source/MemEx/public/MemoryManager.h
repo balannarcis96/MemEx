@@ -1,4 +1,13 @@
 #pragma once
+/**
+ * @file MemoryManager.h
+ *
+ * @brief MemEx MemoryManager implementation
+ *
+ * @author Balan Narcis
+ * Contact: balannarcis96@gmail.com
+ *
+ */
 
 namespace MemEx {
 	/*------------------------------------------------------------
