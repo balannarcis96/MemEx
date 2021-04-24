@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <type_traits>
 #include <intrin.h>
+#include <memory>
 
 #define MEMEX_STATISTICS 1
 
@@ -71,7 +72,7 @@ namespace MemEx {
 
 	//RAII-based spin lock guard (scope guard)
 	class SpinLockScopeGuard {
-
+	public:
 		FORCEINLINE explicit SpinLockScopeGuard(SpinLock* Lock) noexcept
 			:Lock(Lock)
 		{

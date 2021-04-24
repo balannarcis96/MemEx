@@ -1,182 +1,399 @@
 #pragma once
 
 namespace MemEx {
-
 	/*------------------------------------------------------------
-		TObjectPool: Ring based thread safe object pool
-			bUseSpinLock:
-				[true] : SpinLock is used for synchronization
-				[false]: Atomic operations are used for synchronization
+		Memory Manager
 	  ------------------------------------------------------------*/
-	template<typename T, size_t PoolSize, bool bUseSpinLock = false>
-	class TObjectPool {
+	class MemoryManager final{
 	public:
-		struct PoolTraits {
-			static const size_t MyPoolSize = PoolSize;
-			static const size_t MyPoolMask = PoolSize - 1;
+		template<typename T, size_t PoolSize>
+		using TObjectStore = TObjectPool<T, PoolSize>;
 
-			using MyPoolType = T;
-			using MyType = TObjectPool<T, PoolSize>;
+		struct SmallBlock : MemoryBlock<SmallMemBlockSize>, TObjectStore<SmallBlock, SmallMemBlockCount> {
+			SmallBlock(ulong_t ElementSize) noexcept
+				: MemoryBlock(ElementSize)
+			{}
 
-			static_assert((MyPoolSize& MyPoolMask) == 0, "TObjectPool size must be a power of 2");
+			SmallBlock(ulong_t ElementSize, ulong_t ElementsCount) noexcept
+				: MemoryBlock(ElementSize, ElementsCount)
+			{}
+		};
+		struct MediumBlock : MemoryBlock<MediumMemBlockSize>, TObjectStore<MediumBlock, MediumMemBlockCount> {
+			MediumBlock(ulong_t ElementSize) noexcept
+				: MemoryBlock(ElementSize)
+			{}
 
-#ifdef MEMEX_STATISTICS
-			static inline std::atomic<size_t> TotalAllocations = 0;
-			static inline std::atomic<size_t> TotalDeallocations = 0;
+			MediumBlock(ulong_t ElementSize, ulong_t ElementsCount) noexcept
+				: MemoryBlock(ElementSize, ElementsCount)
+			{}
+		};
+		struct LargeBlock : MemoryBlock<LargeMemBlockSize>, TObjectStore<LargeBlock, LargeMemBlockCount> {
+			LargeBlock(ulong_t ElementSize) noexcept
+				: MemoryBlock(ElementSize)
+			{}
 
-			static inline std::atomic<size_t> TotalOSAllocations = 0;
-			static inline std::atomic<size_t> TotalOSDeallocations = 0;
-#endif
+			LargeBlock(ulong_t ElementSize, ulong_t ElementsCount) noexcept
+				: MemoryBlock(ElementSize, ElementsCount)
+			{}
+		};
+		struct ExtraLargeBlock : MemoryBlock<ExtraLargeMemBlockSize>, TObjectStore<ExtraLargeBlock, ExtraLargeMemBlockCount> {
+			ExtraLargeBlock(ulong_t ElementSize) noexcept
+				: MemoryBlock(ElementSize)
+			{}
+
+			ExtraLargeBlock(ulong_t ElementSize, ulong_t ElementsCount) noexcept
+				: MemoryBlock(ElementSize, ElementsCount)
+			{}
 		};
 
-		//Preallocate and fill the whole Pool with [PoolSize] elements
-		static bool Preallocate() noexcept {
-			// ! Hopefully GAllocate will allocate in a continuous fashion.
-
-			for (size_t i = 0; i < PoolSize; i++)
-			{
-				Pool[i] = GAllocate(sizeof(T), ALIGNMENT);
-				if (Pool[i] == nullptr) {
-					return false;
-				}
+		static int Initialize() noexcept {
+			if (!SmallBlock::Preallocate()) {
+				return 1;
+			}
+			if (!MediumBlock::Preallocate()) {
+				return 2;
+			}
+			if (!LargeBlock::Preallocate()) {
+				return 3;
+			}
+			if (ExtraLargeBlock::Preallocate()) {
+				return 4;
 			}
 
+			return 0;
+		}
+		static bool Shutdown() noexcept {
 			return true;
 		}
 
-		//Allocate raw ptr T
-		template<typename ...Types>
-		static T* NewRaw(Types... Args) noexcept {
-			return Allocate(std::forward<Types...>(Args)...);
-		}
-
-		//Deallocate T
-		static void Deallocate(T* Obj) noexcept {
-
-			if constexpr (std::is_destructible_v<T>) {
-				//Call destructor manually
-				Obj->~T();
-			}
-
-			ptr_t PrevVal{ nullptr };
-
-			if constexpr (bUseSpinLock) {
-				{ //Critical section
-					SpinLockScopeGuard Guard(&SpinLock);
-
-					const uint64_t InsPos = TailPosition++;
-
-					PrevVal = Pool[InsPos & PoolTraits::MyPoolMask];
-					Pool[InsPos & PoolTraits::MyPoolMask] = (ptr_t)Obj;
-				}
-			}
-			else {
-				uint64_t InsPos = (uint64_t)InterlockedIncrement64((volatile long long*)(&TailPosition));
-				InsPos--;
-
-				PrevVal = InterlockedExchangePointer(
-					reinterpret_cast<volatile ptr_t*>(&Pool[InsPos & PoolTraits::MyPoolMask]),
-					reinterpret_cast<ptr_t>(Obj)
-				);
-			}
-
-			if (PrevVal)
-			{
-				GFree(PrevVal);
-
 #ifdef MEMEX_STATISTICS
-				PoolTraits::TotalOSDeallocations++;
+		static inline std::atomic<size_t> CustomSizeAllocations{ 0 };
+		static inline std::atomic<size_t> CustomSizeDeallocations{ 0 };
 #endif
 
-				return;
+#undef MEMORY_MANAGER_CALL_DESTRUCTOR
+#define MEMORY_MANAGER_CALL_DESTRUCTOR																		\
+			IMemoryBlock* NewBlockObject = (IMemoryBlock*)Object; 											\
+			if constexpr (std::is_destructible_v<T>) {														\
+				if(bCallDestructor && !NewBlockObject->bDontDestruct)	{									\
+					auto Ptr = reinterpret_cast<ptr_t>(NewBlockObject->Block);								\
+																											\
+					size_t Space = sizeof(T) + alignof(T);													\
+					std::align(alignof(T), sizeof(T), Ptr, Space);											\
+																											\
+					/*call destructor*/																		\
+					reinterpret_cast<T*>(Ptr)->~T();														\
+				}																							\
 			}
 
-#ifdef MEMEX_STATISTICS
-			PoolTraits::TotalDeallocations++;
-#endif
-		}
-
-		//Get GUID of this Pool instance
-		static size_t GetPoolId() {
-			return (size_t)(&PoolTraits::MyType::Preallocate);
-		}
-
-#ifdef MEMEX_STATISTICS
-		static size_t GetTotalOSDeallocations() {
-			return PoolTraits::TotalOSDeallocations;
-		}
-
-		static size_t GetTotalOSAllocations() {
-			return PoolTraits::TotalOSAllocations;
-		}
-
-		static size_t GetTotalDeallocations() {
-			return PoolTraits::TotalDeallocations;
-		}
-
-		static size_t GetTotalAllocations() {
-			return PoolTraits::TotalAllocations;
-		}
-#endif
-
-	private:
-		template<typename ...Types>
-		static T* Allocate(Types... Args) noexcept {
-			T* Allocated{ nullptr };
-
-			if constexpr (bUseSpinLock) {
-				{ //Critical section
-					SpinLockScopeGuard Guard(&SpinLock);
-
-					const uint64_t PopPos = HeadPosition++;
-
-					Allocated = reinterpret_cast<T*>(&Pool[PopPos & PoolTraits::MyPoolMask]);
-				}
-			}
-			else {
-				uint64_t PopPos = (uint64_t)InterlockedIncrement64(reinterpret_cast<volatile long long*>(&HeadPosition));
-				PopPos--;
-
-				Allocated = reinterpret_cast<T*>(InterlockedExchangePointer(
-					reinterpret_cast<volatile ptr_t*>(&Pool[PopPos & PoolTraits::MyPoolMask]),
-					nullptr
-				));
+#undef MEMORY_MANAGER_CALL_DESTRUCTOR_BUFFER
+#define MEMORY_MANAGER_CALL_DESTRUCTOR_BUFFER																\
+			IMemoryBlock* NewBlockObject = (IMemoryBlock*)Object; 											\
+			if constexpr (std::is_destructible_v<T>) {														\
+				if(bCallDestructor && !NewBlockObject->bDontDestruct)	{									\
+					auto Ptr = reinterpret_cast<ptr_t>(NewBlockObject->Block);								\
+																											\
+					size_t Space = NewBlockObject->BlockSize;												\
+					std::align(alignof(T), sizeof(T), Ptr, Space);											\
+																											\
+					for(size_t i = 0; i < NewBlockObject->ElementsCount; i ++) {							\
+						/*call destructor*/																	\
+						T* IPtr = reinterpret_cast<T*>(reinterpret_cast<uint8_t*>(Ptr) + (sizeof(T) * i));	\
+						/*call destructor*/																	\
+						IPtr->~T();																			\
+					}																						\
+				}																							\
 			}
 
-			if (!Allocated) {
-				Allocated = (T*)GAllocate(sizeof(T), ALIGNMENT);
-				if (!Allocated) {
-					return nullptr;
-				}
+#pragma region Compiletime
+		template<typename T, typename ...Types>
+		static MPtr<T> Alloc(Types... Args) noexcept {
+			if constexpr (std::is_reference_v<T>) {
+				static_assert(false, "Alloc<T> Cant allocate T reference!");
+			}
 
-#ifdef MEMEX_STATISTICS
-				PoolTraits::TotalOSAllocations++;
-#endif
+			if constexpr (std::is_array_v<T>) {
+				static_assert(false, "Use AllocBuffer(Count) to allocate arrays!");
+			}
+
+			constexpr size_t Size = sizeof(T) + alignof(T);
+
+			MemoryBlockBase* NewBlockObject = AllocBlock<T>();
+			if (!NewBlockObject) {
+				return { nullptr , nullptr };
+			}
+
+			ptr_t Ptr = NewBlockObject->Block;
+
+			//Align pointer
+			size_t Space = Size;
+			if (!std::align(alignof(T), sizeof(T), Ptr, Space)) {
+				NewBlockObject->Destroy((ptr_t)NewBlockObject, false);
+				//LogFatal("MemoryManager::Alloc(...) Failed to std::align({}, {}, ptr, {})!", alignof(T), sizeof(T), Size);
+				return { nullptr , nullptr };
 			}
 
 			if constexpr (sizeof...(Types) == 0) {
-				if constexpr (std::is_default_constructible_v<T>) {
+				if constexpr (std::is_default_constructible_v<std::decay<T>::type>) {
+
 					//Call default constructor manually
-					new (Allocated) T();
+					new (Ptr) T();
 				}
 			}
 			else {
 				//Call constructor manually
-				new (Allocated) T(FWD(Args));
+				new (Ptr) T(std::forward<Types...>(Args)...);
 			}
 
-#ifdef MEMEX_STATISTICS
-			PoolTraits::TotalAllocations++;
-#endif
-
-			return Allocated;
+			return { NewBlockObject, reinterpret_cast<T*>(Ptr) };
 		}
 
-		static inline ptr_t 				Pool[PoolSize] = {};
-		static inline uint64_t  PTR			HeadPosition = 0;
-		static inline uint64_t  PTR			TailPosition = 0;
-		static inline SpinLock				SpinLock{};
+		template<typename T>
+		static MSharedPtr<T> AllocShared() noexcept {
+			MPtr<T> Unique = Alloc<T>();
+			if (Unique.IsNull()) {
+				return { nullptr, nullptr };
+			}
+
+			T* Ptr = Unique.Get();
+			MemoryBlockBase* BlockObject = Unique.BlockObject.Release();
+			Unique.Ptr = nullptr;
+
+			return MSharedPtr<T>(BlockObject, Ptr);
+		}
+
+		template<typename T>
+		static IMemoryBlock* AllocBlock() noexcept {
+			constexpr size_t Size = sizeof(T) + alignof(T);
+
+			IMemoryBlock* NewBlockObject = nullptr;
+
+			if constexpr (Size <= SmallMemBlockSize)
+			{
+				NewBlockObject = SmallBlock::NewRaw((ulong_t)Size);
+				if (!NewBlockObject) {
+					//LogFatal("MemoryManager::Alloc() SmallBlock::NewRaw() Failed!");
+					return nullptr;
+				}
+
+				NewBlockObject->Destroy = [](ptr_t Object, bool bCallDestructor = true)  -> void {
+					MEMORY_MANAGER_CALL_DESTRUCTOR;
+					SmallBlock::Deallocate(reinterpret_cast<SmallBlock*>(NewBlockObject));
+				};
+			}
+			else if constexpr (Size <= MediumMemBlockSize)
+			{
+				NewBlockObject = MediumBlock::NewRaw((ulong_t)Size);
+				if (!NewBlockObject) {
+					//LogFatal("MemoryManager::Alloc() MediumBlock::NewRaw() Failed!");
+					return nullptr;
+				}
+
+				NewBlockObject->Destroy = [](ptr_t Object, bool bCallDestructor = true) {
+					MEMORY_MANAGER_CALL_DESTRUCTOR;
+					MediumBlock::Deallocate(reinterpret_cast<MediumBlock*>(NewBlockObject));
+				};
+			}
+			else if constexpr (Size <= LargeMemBlockSize)
+			{
+				NewBlockObject = LargeBlock::NewRaw((ulong_t)Size);
+				if (!NewBlockObject) {
+					//LogFatal("MemoryManager::Alloc() LargeBlock::NewRaw() Failed!");
+					return nullptr;
+				}
+
+				NewBlockObject->Destroy = [](ptr_t Object, bool bCallDestructor = true) {
+					MEMORY_MANAGER_CALL_DESTRUCTOR;
+					LargeBlock::Deallocate(reinterpret_cast<LargeBlock*>(NewBlockObject));
+				};
+			}
+			else if constexpr (Size <= ExtraLargeMemBlockSize)
+			{
+				NewBlockObject = ExtraLargeBlock::NewRaw((ulong_t)Size);
+				if (!NewBlockObject) {
+					//LogFatal("MemoryManager::Alloc() ExtraLargeBlock::NewRaw() Failed!");
+					return nullptr;
+				}
+
+				NewBlockObject->Destroy = [](ptr_t Object, bool bCallDestructor = true) {
+					MEMORY_MANAGER_CALL_DESTRUCTOR;
+					ExtraLargeBlock::Deallocate(reinterpret_cast<ExtraLargeBlock*>(NewBlockObject));
+				};
+			}
+			else {
+				NewBlockObject = (IMemoryBlock*)MEM_ALLOC(sizeof(CustomBlockHeader) + Size);
+				if (NewBlockObject)
+				{
+					//Construct the CustomBlockHeader at the begining of the block
+					new (reinterpret_cast<CustomBlockHeader*>(NewBlockObject)) CustomBlockHeader(Size, Size);
+
+					//Set the destruction handler
+					NewBlockObject->Destroy = [](ptr_t Object, bool bCallDestructor = true) {
+						MEMORY_MANAGER_CALL_DESTRUCTOR;
+
+#ifdef MEMORY_STATISTICS
+						CustomSizeDeallocations++;
+#endif
+						GFree(NewBlockObject);
+					};
+
+#ifdef MEMORY_STATISTICS
+					CustomSizeAllocations++;
+#endif
+				}
+				else {
+					//LogFatal("MemoryManager::Alloc() Failed to get memory from OS!");
+					return nullptr;
+				}
+			}
+
+			return NewBlockObject;
+		}
+#pragma endregion
+
+#pragma region Runtime
+		template<typename T>
+		static IMemoryBlock* AllocBlock(size_t Count) noexcept {
+			const size_t Size = (sizeof(T) * Count) + alignof(T);
+
+			IMemoryBlock* NewBlockObject = nullptr;
+
+			if (Size <= SmallMemBlockSize)
+			{
+				NewBlockObject = SmallBlock::NewRaw((ulong_t)sizeof(T), (ulong_t)Count);
+				if (!NewBlockObject) {
+					//LogFatal("MemoryManager::Alloc() SmallBlock::NewRaw() Failed!");
+					return nullptr;
+				}
+
+				NewBlockObject->Destroy = [](ptr_t Object, bool bCallDestructor = true) {
+					MEMORY_MANAGER_CALL_DESTRUCTOR_BUFFER;
+					SmallBlock::Deallocate(reinterpret_cast<SmallBlock*>(NewBlockObject));
+				};
+			}
+			else if (Size <= MediumMemBlockSize)
+			{
+				NewBlockObject = MediumBlock::NewRaw((ulong_t)sizeof(T), (ulong_t)Count);
+				if (!NewBlockObject) {
+					//LogFatal("MemoryManager::Alloc() MediumBlock::NewRaw() Failed!");
+					return nullptr;
+				}
+
+				NewBlockObject->Destroy = [](ptr_t Object, bool bCallDestructor = true) {
+					MEMORY_MANAGER_CALL_DESTRUCTOR_BUFFER;
+					MediumBlock::Deallocate(reinterpret_cast<MediumBlock*>(NewBlockObject));
+				};
+			}
+			else if (Size <= LargeMemBlockSize)
+			{
+				NewBlockObject = LargeBlock::NewRaw((ulong_t)sizeof(T), (ulong_t)Count);
+				if (!NewBlockObject) {
+					//LogFatal("MemoryManager::Alloc() LargeBlock::NewRaw() Failed!");
+					return nullptr;
+				}
+
+				NewBlockObject->Destroy = [](ptr_t Object, bool bCallDestructor = true) {
+					MEMORY_MANAGER_CALL_DESTRUCTOR_BUFFER;
+					LargeBlock::Deallocate(reinterpret_cast<LargeBlock*>(NewBlockObject));
+				};
+			}
+			else if (Size <= ExtraLargeMemBlockSize)
+			{
+				NewBlockObject = ExtraLargeBlock::NewRaw((ulong_t)sizeof(T), (ulong_t)Count);
+				if (!NewBlockObject) {
+					//LogFatal("MemoryManager::Alloc() ExtraLargeBlock::NewRaw() Failed!");
+					return nullptr;
+				}
+
+				NewBlockObject->Destroy = [](ptr_t Object, bool bCallDestructor = true) {
+					MEMORY_MANAGER_CALL_DESTRUCTOR_BUFFER;
+					ExtraLargeBlock::Deallocate(reinterpret_cast<ExtraLargeBlock*>(NewBlockObject));
+				};
+			}
+			else {
+				NewBlockObject = (IMemoryBlock*)MEM_ALLOC(sizeof(CustomBlockHeader) + Size);
+				if (NewBlockObject)
+				{
+					//Construct the CustomBlockHeader at the begining of the block
+					new (reinterpret_cast<CustomBlockHeader*>(NewBlockObject)) CustomBlockHeader((ulong_t)Size, (ulong_t)sizeof(T), (ulong_t)Count);
+
+					NewBlockObject->Destroy = [](ptr_t Object, bool bCallDestructor = true) {
+						MEMORY_MANAGER_CALL_DESTRUCTOR_BUFFER;
+
+#ifdef MEMORY_STATISTICS
+						CustomSizeDeallocations++;
+#endif
+						GFree(NewBlockObject);
+					};
+
+#ifdef MEMORY_STATISTICS
+					CustomSizeAllocations++;
+#endif
+				}
+				else {
+					//LogFatal("MemoryManager::Alloc() Failed to get memory from OS!");
+					return nullptr;
+				}
+			}
+
+			return NewBlockObject;
+		}
+
+		// Allocate T[Size] buffer
+		// bDontConstructElements - if true the call to T default constructor (for each element) wont be made
+		template<typename T, bool bDontConstructElements = false>
+		static MPtr<T> AllocBuffer(const size_t Count) noexcept {
+			if constexpr (std::is_array_v<T>) {
+				static_assert(false, "Dont use AllocBuffer<T[]>(size) but use AllocBuffer<T>(size)!");
+			}
+
+			IMemoryBlock* NewBlockObject = AllocBlock<T>(Count);
+			if (!NewBlockObject) {
+				return { nullptr , nullptr };
+			}
+
+			//if we dont construct, we dont destruct 
+			if constexpr (bDontConstructElements && std::is_destructible_v<T>) {
+				NewBlockObject->bDontDestruct = true;
+			}
+
+			//Change to size in bytes
+			const size_t Size = (sizeof(T) * Count) + alignof(T);
+
+			ptr_t Ptr = reinterpret_cast<ptr_t>(NewBlockObject->Block);
+
+			//Align pointer
+			size_t Space = Size;
+			if (!std::align(alignof(T), sizeof(T), Ptr, Space)) {
+				if constexpr (!bDontConstructElements && std::is_destructible_v<T>) {
+					NewBlockObject->Destroy((ptr_t)NewBlockObject, false);
+				}
+
+				//LogFatal("MemoryManager::AllocBuffer({}) Failed to std::align({}, {}, ptr, {})!", Count, alignof(T), sizeof(T), Size);
+				return { nullptr , nullptr };
+			}
+
+			if constexpr (std::is_default_constructible_v<T> && !bDontConstructElements) {
+				//Call default constructor manually for each object of the array
+				for (size_t i = 0; i < Count; i++)
+				{
+					new (reinterpret_cast<uint8_t*>(Ptr) + (sizeof(T) * i)) T();
+				}
+			}
+
+			return { NewBlockObject, reinterpret_cast<T*>(Ptr) };
+		}
+
+		template<typename T>
+		static MSharedPtr<T> AllocSharedBuffer(size_t Count) noexcept {
+			MPtr<T> Unique = AllocBuffer<T>(Count);
+			if (Unique.IsNull()) {
+				return { nullptr, nullptr };
+			}
+
+			T* Ptr = Unique.Get();
+			return { Unique.BlockObject.Release(), Ptr };
+		}
+#pragma endregion
 	};
-
-
 }

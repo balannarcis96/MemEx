@@ -19,13 +19,17 @@ struct TypeA {
 	int a{ 0 };
 };
 
-struct TypeB{
+struct TypeB {
 	int a{ 0 };
 };
 
 int main(int argc, const char** argv) {
 
 	MPtr<TypeA> a;
+
+	auto b = MemoryManager::AllocShared<TypeB>();
+	auto b2 = MemoryManager::Alloc<TypeB>();
+	
 
 	return 0;
 }

@@ -7,7 +7,8 @@
 namespace MemEx {
 	class MemoryResourceBase;
 
-	typedef void (*MemoryBlockDestroyCallback)(MemoryResourceBase*);
+	//typedef void (*MemoryBlockDestroyCallback)(MemoryResourceBase*);
+	using MemoryBlockDestroyCallback = Delegate<void, ptr_t, bool>;
 
 	class MemoryResourceBase {
 	protected:
@@ -26,7 +27,11 @@ namespace MemEx {
 		};
 
 		//Destroy callback (deleter)
-		MemoryBlockDestroyCallback	OnDestroy{ nullptr };
+		MemoryBlockDestroyCallback	Destroy{  };
+
+		template<typename T>
+		friend class MemoryResourcePtrBase;
+		friend class MemoryManager;
 	};
 
 	template<bool bAtomicRef = true>
@@ -52,10 +57,10 @@ namespace MemEx {
 
 		FORCEINLINE bool ReleaseReference() const noexcept {
 			if constexpr (bAtomicRef) {
-				if (InterlockedDecrement(reinterpret_cast<volatile long*>(&this->RefCount)) == 0) {
+				if (_InterlockedDecrement(reinterpret_cast<volatile long*>(&this->RefCount)) == 0) {
 
-					if (OnDestroy) {
-						OnDestroy(this, bDontDestruct);
+					if (!this->Destroy.isNull()) {
+						this->Destroy((ptr_t)this, this->bDontDestruct == 0);
 					}
 
 					return true;
@@ -66,8 +71,8 @@ namespace MemEx {
 
 				if (RefCount == 0)
 				{
-					if (OnDestroy) {
-						OnDestroy(this, bDontDestruct);
+					if (!this->Destroy.isNull()) {
+						this->Destroy((ptr_t)this, this->bDontDestruct == 0);
 					}
 
 					return true;
@@ -76,6 +81,10 @@ namespace MemEx {
 
 			return false;
 		}
+
+		template<typename T, typename Base>
+		friend class _TSharedPtr;
+		friend class MemoryManager;
 	};
 
 	class MemoryBlockBase : public MemoryResource<true> {
