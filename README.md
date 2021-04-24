@@ -3,7 +3,7 @@ Intrusive, elegant memory management solution for c++17 high performance project
 
 Usage Example:
   ```cpp
-   class TypeA {
+   class TypeA { //Example Type
    public:
    	  int a{ 23 };
    	  double t{ 0.0 };
@@ -20,10 +20,30 @@ Usage Example:
    };
    ...
    {
-    ...
-    auto Obj = MemoryManager::Alloc<TypeA>(23.3);
+    //some scope
+    auto Obj = MemoryManager::Alloc<TypeA>(23.3); //Allocate object
     
-    Obj->a = 5;
+    Obj->a = 5; //modify object members etc
+   }
+   ...
+   {
+    //some other scope
+    auto Obj = MemoryManager::AllocShared<TypeA>(23.3); //Allocate object
+    
+    PassPointerToOtherThread(Obj);
+    
+    Obj->a = 5; //modify object members etc
+   }
+   ...
+   {
+    //some other scope allocate an array of TypeA
+    auto Array = MemoryManager::AllocBuffer<TypeA>(64);
+    
+    for(size_t i =0; i < 64; i++)
+    {
+      Array[i].a = i + 1;
+      ...
+     }
    }
   ```
 
