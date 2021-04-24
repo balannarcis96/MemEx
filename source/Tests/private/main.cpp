@@ -31,6 +31,21 @@ struct TypeA {
 	}
 };
 
+struct TypeB: IResource<TypeB> {
+	int a{ 23 };
+	double t{ 0.0 };
+
+	TypeB() {
+		std::cout << "TypeB()\n";
+	}
+	TypeB(double d) :t(d) {
+		std::cout << "TypeB(d)\n";
+	}
+	~TypeB() {
+		std::cout << "~TypeB()\n";
+	}
+};
+
 bool TestUniquePtr() {
 	std::cout << "#TestUniquePtr():\n";
 	{
@@ -93,6 +108,15 @@ bool TestThread(int argc) {
 	return true;
 }
 
+bool TestBuffer() {
+
+	auto Array = MemoryManager::AllocBuffer<TypeA>(64);
+
+	auto Array2 = TypeB::NewArray(64);
+
+	return true;
+}
+
 int main(int argc, const char** argv)
 {
 	if (MemoryManager::Initialize()) {
@@ -101,15 +125,15 @@ int main(int argc, const char** argv)
 		return 1;
 	}
 
-	//if (!TestUniquePtr()) {
-	//	std::cin.get();
-	//	return 1;
-	//}
+	if (!TestUniquePtr()) {
+		std::cin.get();
+		return 1;
+	}
 
-	//if (!TestSharedPtr(argc)) {
-	//	std::cin.get();
-	//	return 1;
-	//}
+	if (!TestSharedPtr(argc)) {
+		std::cin.get();
+		return 1;
+	}
 
 	if (!TestThread(argc)) {
 		std::cin.get();

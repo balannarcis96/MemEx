@@ -105,7 +105,7 @@ namespace MemEx {
 				SmallBlock::GetTotalOSAllocations() + MediumBlock::GetTotalOSAllocations() + LargeBlock::GetTotalOSAllocations() + ExtraLargeBlock::GetTotalOSAllocations(),
 				SmallBlock::GetTotalOSDeallocations() + MediumBlock::GetTotalOSDeallocations() + LargeBlock::GetTotalOSDeallocations() + ExtraLargeBlock::GetTotalOSDeallocations()
 			);
-			printf("MemoryManager ###############################################################\n");
+			printf("\nMemoryManager ###############################################################\n");
 		}
 #endif
 

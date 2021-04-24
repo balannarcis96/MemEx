@@ -182,5 +182,26 @@ namespace MemEx {
 			Block = (reinterpret_cast<uint8_t*>(this) + sizeof(CustomBlockHeader));
 		}
 	};
+
+	template<typename TUpper>
+	struct IResource {
+		template<typename ...Types>
+		FORCEINLINE static MPtr<TUpper> New(Types... Args) noexcept {
+			return MemoryManager::Alloc<TUpper>(std::forward<Types...>(Args)...);
+		}
+
+		template<typename ...Types>
+		FORCEINLINE static MSharedPtr<TUpper> NewShared(Types... Args) noexcept {
+			return MemoryManager::AllocShared<TUpper>(std::forward<Types...>(Args)...);
+		}
+
+		FORCEINLINE static MPtr<TUpper> NewArray(size_t Count) noexcept {
+			return MemoryManager::AllocBuffer<TUpper>(Count);
+		}
+
+		FORCEINLINE static MSharedPtr<TUpper> NewSharedArray(size_t Count) noexcept {
+			return MemoryManager::AllocSharedBuffer<TUpper>(Count);
+		}
+	};
 }
 
