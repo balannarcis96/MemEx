@@ -1,0 +1,13 @@
+.vs
+.vs/*
+.vscode
+.vscode/*
+.git
+.git/*
+build/*
+/build/*
+*/build/*
+build2/*
+/build2/*
+*/build2/*
+out
