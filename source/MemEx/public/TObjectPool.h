@@ -26,11 +26,11 @@ namespace MemEx {
 			static_assert((MyPoolSize& MyPoolMask) == 0, "TObjectPool size must be a power of 2");
 
 #ifdef MEMEX_STATISTICS
-			static std::atomic<size_t> TotalAllocations;
-			static std::atomic<size_t> TotalDeallocations;
+			static inline std::atomic<size_t> TotalAllocations{ 0 };
+			static inline std::atomic<size_t> TotalDeallocations{ 0 };
 
-			static std::atomic<size_t> TotalOSAllocations;
-			static std::atomic<size_t> TotalOSDeallocations;
+			static inline std::atomic<size_t> TotalOSAllocations{ 0 };
+			static inline std::atomic<size_t> TotalOSDeallocations{ 0 };
 #endif
 		};
 
@@ -178,29 +178,9 @@ namespace MemEx {
 			return Allocated;
 		}
 
-		static	ptr_t 				Pool[PoolSize];
-		static	uint64_t  			HeadPosition;
-		static	uint64_t  			TailPosition;
-		static	SpinLock			SpinLock;
+		static	inline ptr_t 				Pool[PoolSize]{ 0 };
+		static	inline uint64_t  			HeadPosition{ 0 };
+		static	inline uint64_t  			TailPosition{ 0 };
+		static	inline SpinLock				SpinLock{ };
 	};
-
-#ifdef MEMEX_STATISTICS
-	template<typename T, size_t PoolSize, bool bUseSpinLock>
-	inline std::atomic<size_t> TObjectPool<T, PoolSize, bUseSpinLock>::PoolTraits::TotalAllocations;
-	template<typename T, size_t PoolSize, bool bUseSpinLock>
-	inline std::atomic<size_t> TObjectPool<T, PoolSize, bUseSpinLock>::PoolTraits::TotalDeallocations;
-	template<typename T, size_t PoolSize, bool bUseSpinLock>
-	inline std::atomic<size_t> TObjectPool<T, PoolSize, bUseSpinLock>::PoolTraits::TotalOSAllocations;
-	template<typename T, size_t PoolSize, bool bUseSpinLock>
-	inline std::atomic<size_t> TObjectPool<T, PoolSize, bUseSpinLock>::PoolTraits::TotalOSDeallocations;
-#endif
-
-	template<typename T, size_t PoolSize, bool bUseSpinLock>
-	inline	ptr_t 				TObjectPool<T, PoolSize, bUseSpinLock>::Pool[PoolSize];
-	template<typename T, size_t PoolSize, bool bUseSpinLock>
-	inline	uint64_t  			TObjectPool<T, PoolSize, bUseSpinLock>::HeadPosition;
-	template<typename T, size_t PoolSize, bool bUseSpinLock>
-	inline	uint64_t  			TObjectPool<T, PoolSize, bUseSpinLock>::TailPosition;
-	template<typename T, size_t PoolSize, bool bUseSpinLock>
-	inline	SpinLock			TObjectPool<T, PoolSize, bUseSpinLock>::SpinLock;
 }
