@@ -1,6 +1,13 @@
 # MemEx: intrusive_memory_management
 Intrusive, elegant memory management solution for c++17 high performance projects.
 
+Install guid (Windows & Visual Studio):
+  1.Download and install CMake 3.8 or newer
+  2.Clone the repo
+  3.Create 'build' folder at the same level with the 'source' folder
+  4.Start cmd inside the build folder and run 'cmake ../source'
+  5.Build and run MemEx_Tests
+
 Usage Example:
   ```cpp
    class TypeA { //Example Type
