@@ -23,13 +23,13 @@ Usage Example:
     	double t{ 0.0 };
     
     	TypeB() {
-    		std::cout << "TypeA()\n";
+    		std::cout << "TypeB()\n";
     	}
     	TypeB(double d) :t(d) {
-    		std::cout << "TypeA(d)\n";
+    		std::cout << "TypeB(d)\n";
     	}
     	~TypeB() {
-    		std::cout << "~TypeA()\n";
+    		std::cout << "~TypeB()\n";
     	}
     };
    ...
